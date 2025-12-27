@@ -186,6 +186,15 @@ def parse_args() -> argparse.Namespace:
         help="Seconds between runs for scheduled scraping (0 = run once)",
     )
     parser.add_argument(
+        "--html-file",
+        help="Parse a local HTML file instead of fetching from the network",
+    )
+    parser.add_argument(
+        "--save-html",
+        action="store_true",
+        help="Save the fetched HTML to the output directory for debugging",
+    )
+    parser.add_argument(
         "--include-all",
         action="store_true",
         help="Include all products (skip hot-only filtering)",
@@ -203,11 +212,24 @@ def build_output_path(output_dir: Path, output_name: str, fmt: str) -> Path:
 
 
 def run_once(args: argparse.Namespace) -> int:
-    try:
-        html = fetch_html(args.url)
-    except requests.RequestException as exc:
-        print(f"Failed to fetch {args.url}: {exc}", file=sys.stderr)
-        return 1
+    if args.html_file:
+        html_path = Path(args.html_file)
+        if not html_path.exists():
+            print(f"HTML file not found: {html_path}", file=sys.stderr)
+            return 1
+        html = html_path.read_text(encoding="utf-8")
+    else:
+        try:
+            html = fetch_html(args.url)
+        except requests.RequestException as exc:
+            print(f"Failed to fetch {args.url}: {exc}", file=sys.stderr)
+            return 1
+
+    output_dir = Path(args.output_dir)
+    if args.save_html and not args.html_file:
+        html_path = build_output_path(output_dir, "temu_page.html", "html")
+        html_path.write_text(html, encoding="utf-8")
+        print(f"Saved HTML snapshot to {html_path}")
 
     json_blobs = extract_embedded_json(html)
     if not json_blobs:
@@ -226,7 +248,7 @@ def run_once(args: argparse.Namespace) -> int:
         products = filter_hot_products(products)
 
     products = products[: args.limit]
-    output_path = build_output_path(Path(args.output_dir), args.output, args.format)
+    output_path = build_output_path(output_dir, args.output, args.format)
     save_output(products, output_path, args.format)
 
     print(f"Saved {len(products)} items to {output_path}")
