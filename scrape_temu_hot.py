@@ -49,6 +49,26 @@ def fetch_html(url: str, timeout: int = 20) -> str:
     return response.text
 
 
+def extract_json_objects(text: str) -> list[dict[str, Any]]:
+    decoder = json.JSONDecoder()
+    objects: list[dict[str, Any]] = []
+    index = 0
+    length = len(text)
+    while index < length:
+        if text[index] != "{":
+            index += 1
+            continue
+        try:
+            obj, end = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            index += 1
+            continue
+        if isinstance(obj, dict):
+            objects.append(obj)
+        index += max(end, 1)
+    return objects
+
+
 def extract_embedded_json(html: str) -> list[dict[str, Any]]:
     soup = BeautifulSoup(html, "html.parser")
     json_blobs: list[dict[str, Any]] = []
@@ -59,6 +79,14 @@ def extract_embedded_json(html: str) -> list[dict[str, Any]]:
             json_blobs.append(json.loads(next_data.string))
         except json.JSONDecodeError:
             pass
+
+    for script in soup.find_all("script", type="application/json"):
+        if not script.string:
+            continue
+        try:
+            json_blobs.append(json.loads(script.string))
+        except json.JSONDecodeError:
+            continue
 
     for script in soup.find_all("script"):
         if not script.string:
@@ -71,6 +99,11 @@ def extract_embedded_json(html: str) -> list[dict[str, Any]]:
                     json_blobs.append(json.loads(match.group(1)))
                 except json.JSONDecodeError:
                     continue
+        if "__NEXT_DATA__" in text or "goodsId" in text:
+            json_blobs.extend(extract_json_objects(text))
+
+    if not json_blobs:
+        json_blobs.extend(extract_json_objects(html))
     return json_blobs
 
 
