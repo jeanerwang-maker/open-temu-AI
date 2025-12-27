@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import csv
+import hashlib
 import random
 from pathlib import Path
 from typing import Iterable
@@ -38,24 +39,42 @@ def generate_store_names(category: str, count: int, words: Iterable[str]) -> lis
     return names
 
 
-def pick_palette() -> tuple[tuple[int, int, int], tuple[int, int, int]]:
-    palettes = [
-        ((18, 32, 47), (244, 211, 94)),
-        ((20, 60, 50), (219, 240, 221)),
-        ((51, 37, 77), (245, 221, 255)),
-        ((71, 43, 38), (255, 230, 205)),
-        ((12, 45, 90), (196, 225, 255)),
-        ((33, 33, 33), (242, 242, 242)),
-    ]
-    return random.choice(palettes)
+def name_seed(name: str) -> int:
+    digest = hashlib.sha256(name.encode("utf-8")).hexdigest()
+    return int(digest[:8], 16)
+
+
+def color_from_seed(seed: int, offset: int) -> tuple[int, int, int]:
+    rng = random.Random(seed + offset)
+    return (rng.randint(20, 220), rng.randint(20, 220), rng.randint(20, 220))
 
 
 def render_logo(name: str, size: int, output_path: Path) -> None:
-    background_color, text_color = pick_palette()
+    seed = name_seed(name)
+    background_color = color_from_seed(seed, 1)
+    text_color = color_from_seed(seed, 2)
+    accent_color = color_from_seed(seed, 3)
     img = Image.new("RGB", (size, size), color=background_color)
     draw = ImageDraw.Draw(img)
 
     initials = "".join([part[0] for part in name.split()[:2]]).upper()
+    rng = random.Random(seed)
+
+    # Draw name-based geometric accents to make each logo distinct.
+    for _ in range(3):
+        x0 = rng.randint(0, size // 2)
+        y0 = rng.randint(0, size // 2)
+        x1 = rng.randint(size // 2, size)
+        y1 = rng.randint(size // 2, size)
+        draw.ellipse((x0, y0, x1, y1), outline=accent_color, width=max(1, size // 40))
+
+    for _ in range(2):
+        x0 = rng.randint(0, size)
+        y0 = rng.randint(0, size)
+        x1 = rng.randint(0, size)
+        y1 = rng.randint(0, size)
+        draw.line((x0, y0, x1, y1), fill=accent_color, width=max(1, size // 30))
+
     font_size = int(size * 0.5)
     try:
         font = ImageFont.truetype("DejaVuSans-Bold.ttf", font_size)
