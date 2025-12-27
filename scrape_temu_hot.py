@@ -228,6 +228,11 @@ def parse_args() -> argparse.Namespace:
         help="Save the fetched HTML to the output directory for debugging",
     )
     parser.add_argument(
+        "--save-html-only",
+        action="store_true",
+        help="Only save the fetched HTML without parsing products",
+    )
+    parser.add_argument(
         "--include-all",
         action="store_true",
         help="Include all products (skip hot-only filtering)",
@@ -263,6 +268,8 @@ def run_once(args: argparse.Namespace) -> int:
         html_path = build_output_path(output_dir, "temu_page.html", "html")
         html_path.write_text(html, encoding="utf-8")
         print(f"Saved HTML snapshot to {html_path}")
+        if args.save_html_only:
+            return 0
 
     json_blobs = extract_embedded_json(html)
     if not json_blobs:
